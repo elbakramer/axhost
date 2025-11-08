@@ -16,8 +16,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-$ErrorActionPreference = "Stop"
-
 $dist = "dist"
 
 New-Item -ItemType Directory -Path "$dist" -Force
