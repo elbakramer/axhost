@@ -1,0 +1,19 @@
+version = 1
+
+[[annotations]]
+path = [
+  ".clang-format",
+  ".gitattributes",
+  ".gitignore",
+  ".gitmodules",
+  ".pre-commit-config.yaml",
+  "CMakePresets.json",
+  "VERSION",
+]
+SPDX-FileCopyrightText = "NONE"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = ["README.md"]
+SPDX-FileCopyrightText = "2025 Yunseong Hwang"
+SPDX-License-Identifier = "Apache-2.0"

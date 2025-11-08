@@ -1,0 +1,112 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 31,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "inherits": [
+        "amd64"
+      ],
+      "binaryDir": "${sourceDir}/build/amd64"
+    },
+    {
+      "name": "common",
+      "hidden": true,
+      "generator": "Ninja Multi-Config",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-msvc.cmake",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "AXHOST_SUPERBUILD": {
+          "type": "BOOL",
+          "value": "ON"
+        }
+      }
+    },
+    {
+      "name": "amd64",
+      "inherits": [
+        "common"
+      ],
+      "cacheVariables": {
+        "CMAKE_SYSTEM_PROCESSOR": {
+          "type": "STRING",
+          "value": "AMD64"
+        }
+      }
+    },
+    {
+      "name": "x86",
+      "inherits": [
+        "common"
+      ],
+      "cacheVariables": {
+        "CMAKE_SYSTEM_PROCESSOR": {
+          "type": "STRING",
+          "value": "x86"
+        }
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "amd64-release",
+      "configurePreset": "amd64",
+      "configuration": "Release"
+    },
+    {
+      "name": "amd64-debug",
+      "configurePreset": "amd64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "x86-release",
+      "configurePreset": "x86",
+      "configuration": "Release"
+    },
+    {
+      "name": "x86-debug",
+      "configurePreset": "x86",
+      "configuration": "Debug"
+    },
+    {
+      "name": "install-amd64-release",
+      "inherits": [
+        "amd64-release"
+      ],
+      "targets": [
+        "install"
+      ]
+    },
+    {
+      "name": "install-amd64-debug",
+      "inherits": [
+        "amd64-debug"
+      ],
+      "targets": [
+        "install"
+      ]
+    },
+    {
+      "name": "install-x86-release",
+      "inherits": [
+        "x86-release"
+      ],
+      "targets": [
+        "install"
+      ]
+    },
+    {
+      "name": "install-x86-debug",
+      "inherits": [
+        "x86-debug"
+      ],
+      "targets": [
+        "install"
+      ]
+    }
+  ]
+}

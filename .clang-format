@@ -1,0 +1,4 @@
+AlignAfterOpenBracket: BlockIndent
+PackConstructorInitializers: Never
+BreakBeforeTernaryOperators: True
+AlignOperands: DontAlign

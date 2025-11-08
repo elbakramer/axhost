@@ -1,0 +1,16 @@
+[submodule "third_party/cli11"]
+	path = third_party/cli11
+	url = https://github.com/CLIUtils/CLI11.git
+	branch = v2.6.1
+[submodule "third_party/qt6"]
+	path = third_party/qt6
+	url = https://code.qt.io/qt/qt5.git
+	branch = v6.10.0
+[submodule "third_party/spdlog"]
+	path = third_party/spdlog
+	url = https://github.com/gabime/spdlog.git
+	branch = v1.16.0
+[submodule "third_party/zlib"]
+	path = third_party/zlib
+	url = https://github.com/zlib-ng/zlib-ng.git
+	branch = 2.2.4
