@@ -21,6 +21,7 @@
 #include <string>
 #include <vector>
 
+#include <ocidl.h>
 #include <windows.h>
 
 #include <QApplication>
@@ -74,6 +75,141 @@ QString GetLastErrorMessage(DWORD err = GetLastError()) {
   if (buf)
     LocalFree(buf);
   return msg;
+}
+
+HRESULT ReadTypeLibIdFromCLSID(REFCLSID rclsid, GUID *pLibid) {
+  if (!pLibid)
+    return E_POINTER;
+
+  LPOLESTR clsidStr = nullptr;
+  HRESULT hr = StringFromCLSID(rclsid, &clsidStr);
+  if (FAILED(hr))
+    return hr;
+
+  std::wstring key = L"CLSID\\";
+  key += clsidStr;
+  key += L"\\TypeLib";
+  CoTaskMemFree(clsidStr);
+
+  HKEY hKey = nullptr;
+  LONG rc = RegOpenKeyExW(HKEY_CLASSES_ROOT, key.c_str(), 0, KEY_READ, &hKey);
+  if (rc != ERROR_SUCCESS)
+    return HRESULT_FROM_WIN32(rc);
+
+  wchar_t buf[64];
+  DWORD sz = sizeof(buf);
+  rc = RegQueryValueExW(hKey, nullptr, nullptr, nullptr, (LPBYTE)buf, &sz);
+  RegCloseKey(hKey);
+  if (rc != ERROR_SUCCESS)
+    return HRESULT_FROM_WIN32(rc);
+
+  return CLSIDFromString(buf, pLibid);
+}
+
+HRESULT
+FindLatestTypeLibVersion(REFGUID libid, USHORT *pMajor, USHORT *pMinor) {
+  if (!pMajor || !pMinor)
+    return E_POINTER;
+  *pMajor = *pMinor = 0;
+
+  LPOLESTR libStr = nullptr;
+  HRESULT hr = StringFromCLSID(libid, &libStr);
+  if (FAILED(hr))
+    return hr;
+
+  std::wstring key = L"TypeLib\\";
+  key += libStr;
+  CoTaskMemFree(libStr);
+
+  HKEY hKey = nullptr;
+  LONG rc = RegOpenKeyExW(HKEY_CLASSES_ROOT, key.c_str(), 0, KEY_READ, &hKey);
+  if (rc != ERROR_SUCCESS)
+    return TYPE_E_LIBNOTREGISTERED;
+
+  DWORD index = 0;
+  wchar_t name[64];
+  DWORD namelen = _countof(name);
+  while ((rc = RegEnumKeyExW(
+              hKey, index++, name, &namelen, nullptr, nullptr, nullptr, nullptr
+          )) == ERROR_SUCCESS) {
+    unsigned x = 0, y = 0;
+    if (swscanf_s(name, L"%u.%u", &x, &y) == 2) {
+      if (x > *pMajor || (x == *pMajor && y > *pMinor)) {
+        *pMajor = (USHORT)x;
+        *pMinor = (USHORT)y;
+      }
+    }
+    namelen = _countof(name);
+  }
+  RegCloseKey(hKey);
+
+  return (*pMajor || *pMinor) ? S_OK : TYPE_E_LIBNOTREGISTERED;
+}
+
+HRESULT GetTypeLibFromCLSID(REFCLSID rclsid, ITypeLib **ppTL) {
+  if (!ppTL)
+    return E_POINTER;
+  *ppTL = nullptr;
+
+  GUID libid{};
+  USHORT maj = 0, min = 0;
+
+  HRESULT hr = ReadTypeLibIdFromCLSID(rclsid, &libid);
+  if (FAILED(hr))
+    return hr;
+
+  hr = FindLatestTypeLibVersion(libid, &maj, &min);
+  if (FAILED(hr))
+    return hr;
+
+  return LoadRegTypeLib(libid, maj, min, LOCALE_USER_DEFAULT, ppTL);
+}
+
+HRESULT FindDefaultSourceIID(ITypeInfo *pCoClassTI, GUID *pOut) {
+  if (!pCoClassTI || !pOut)
+    return E_POINTER;
+
+  *pOut = GUID_NULL;
+
+  for (UINT i = 0;; ++i) {
+    INT implFlags = 0;
+    HRESULT hr = pCoClassTI->GetImplTypeFlags(i, &implFlags);
+
+    if (FAILED(hr))
+      break;
+
+    const bool isDefault = !!(implFlags & IMPLTYPEFLAG_FDEFAULT);
+    const bool isSource = !!(implFlags & IMPLTYPEFLAG_FSOURCE);
+
+    if (!isDefault)
+      continue;
+    if (!isSource)
+      continue;
+
+    HREFTYPE href = 0;
+    hr = pCoClassTI->GetRefTypeOfImplType(i, &href);
+    if (FAILED(hr))
+      continue;
+
+    ITypeInfo *pTI;
+    hr = pCoClassTI->GetRefTypeInfo(href, &pTI);
+    if (FAILED(hr) || !pTI)
+      continue;
+
+    TYPEATTR *pTA = nullptr;
+    hr = pTI->GetTypeAttr(&pTA);
+    if (FAILED(hr) || !pTA) {
+      pTI->Release();
+      continue;
+    }
+
+    *pOut = pTA->guid;
+    pTI->ReleaseTypeAttr(pTA);
+    pTI->Release();
+    return S_OK;
+  }
+
+  return TYPE_E_ELEMENTNOTFOUND;
 }
 
 class ComInitializeContext {
@@ -202,20 +338,23 @@ Server process will now terminate.
   }
 };
 
-class HostingClass : public IUnknown {
+class HostingClass : public IProvideClassInfo2 {
 private:
   volatile LONG m_ref = 1;
+  ClassSpec m_spec;
   QPointer<QAxWidget> m_control;
   QPointer<ExitConditionChecker> m_checker;
+  CLSID m_classId;
 
 public:
   explicit HostingClass(const ClassSpec &spec, ExitConditionChecker *checker)
-      : m_control(new QAxWidget()),
+      : m_spec(spec),
+        m_control(new QAxWidget()),
         m_checker(checker) {
     m_control->setClassContext(spec.clsctx_create);
 
-    CLSID classId;
-    HRESULT conv = CLSIDFromString(spec.clsid.toStdWString().c_str(), &classId);
+    HRESULT conv =
+        CLSIDFromString(spec.clsid.toStdWString().c_str(), &m_classId);
 
     if (FAILED(conv)) {
       QString text = QString(R"(
@@ -290,7 +429,7 @@ Error message:
     if (!ppv)
       return E_POINTER;
     if (riid == IID_IUnknown) {
-      *ppv = static_cast<IUnknown *>(this);
+      *ppv = this;
       AddRef();
       return S_OK;
     }
@@ -298,7 +437,44 @@ Error message:
       *ppv = nullptr;
       return E_NOINTERFACE;
     }
+    if (riid == IID_IProvideClassInfo || riid == IID_IProvideClassInfo2) {
+      HRESULT hr = m_control->queryInterface(riid, ppv);
+      if (SUCCEEDED(hr)) {
+        return hr;
+      }
+      *ppv = this;
+      AddRef();
+      return S_OK;
+    }
     return m_control->queryInterface(riid, ppv);
+  }
+
+  HRESULT STDMETHODCALLTYPE GetClassInfo(ITypeInfo **ppTI) override {
+    if (!ppTI)
+      return E_POINTER;
+    ITypeLib *pTL;
+    HRESULT hr = GetTypeLibFromCLSID(m_classId, &pTL);
+    if (FAILED(hr)) {
+      return hr;
+    }
+    hr = pTL->GetTypeInfoOfGuid(m_classId, ppTI);
+    pTL->Release();
+    return hr;
+  }
+
+  HRESULT STDMETHODCALLTYPE GetGUID(DWORD dwGuidKind, GUID *pGUID) override {
+    if (!pGUID)
+      return E_POINTER;
+    if (dwGuidKind != GUIDKIND_DEFAULT_SOURCE_DISP_IID)
+      return E_INVALIDARG;
+    ITypeInfo *pTI;
+    HRESULT hr = GetClassInfo(&pTI);
+    if (FAILED(hr)) {
+      return hr;
+    }
+    hr = FindDefaultSourceIID(pTI, pGUID);
+    pTI->Release();
+    return hr;
   }
 };
 
