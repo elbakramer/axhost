@@ -22,6 +22,7 @@
 #include <windows.h>
 
 #include <QList>
+#include <QString>
 
 #include "class_spec.h"
 
@@ -30,7 +31,9 @@ private:
   QList<DWORD> m_registry;
 
 public:
-  HostContainerFactoryRegistry(const QList<ClassSpec> &specs);
+  HostContainerFactoryRegistry(
+      const QList<ClassSpec> &specs, const QString &readyEvent = ""
+  );
   ~HostContainerFactoryRegistry();
 };
 

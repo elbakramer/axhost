@@ -30,7 +30,7 @@
 #include "utils.h"
 
 HostContainerFactoryRegistry::HostContainerFactoryRegistry(
-    const QList<ClassSpec> &specs
+    const QList<ClassSpec> &specs, const QString &readyEvent
 ) {
   HRESULT sus = CoSuspendClassObjects();
   if (FAILED(sus)) {
@@ -81,6 +81,16 @@ Error message:
   }
   if (SUCCEEDED(sus)) {
     HRESULT res = CoResumeClassObjects();
+    QString name = readyEvent;
+    if (name.isEmpty()) {
+      name = QString("Local\\AxHost_Ready_%1").arg(GetCurrentProcessId());
+    }
+    HANDLE hEvent =
+        CreateEvent(nullptr, TRUE, FALSE, name.toStdWString().c_str());
+    if (hEvent) {
+      SetEvent(hEvent);
+      CloseHandle(hEvent);
+    }
   }
   if (success == 0) {
     QString text = QString(R"(

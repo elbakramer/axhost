@@ -33,6 +33,7 @@
 struct ParsedResult {
   QList<ClassSpec> specs;
   int timeout = 60000;
+  QString readyEvent;
 
   int code = 0;
   QString msg;

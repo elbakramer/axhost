@@ -105,6 +105,13 @@ CommandLineParser::CommandLineParser()
       )
       ->transform(as_duration)
       ->type_name(as_duration_desc);
+  m_app
+      .add_option(
+          "--ready-event", m_result.readyEvent,
+          "Fire named event when classes are available "
+          "(default=Local\\AxHost_Ready_{PID})."
+      )
+      ->type_name("<name>");
 }
 
 ParsedResult CommandLineParser::parse(int argc, char *argv[]) {

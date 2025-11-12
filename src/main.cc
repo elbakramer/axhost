@@ -61,7 +61,7 @@ Error message:
 
   ExitConditionChecker *checker =
       new ExitConditionChecker(parsed.timeout, &app);
-  HostContainerFactoryRegistry registry(parsed.specs);
+  HostContainerFactoryRegistry registry(parsed.specs, parsed.readyEvent);
 
   return app.exec();
 }
