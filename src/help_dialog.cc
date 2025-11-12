@@ -33,7 +33,6 @@ HelpDialog::HelpDialog(QWidget *parent)
     : QDialog(parent) {
   setWindowTitle(QCoreApplication::applicationName());
   setModal(true);
-  setAttribute(Qt::WA_DeleteOnClose);
   setMinimumSize(800, 600);
   setSizeGripEnabled(true);
 
