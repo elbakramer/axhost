@@ -35,7 +35,7 @@ endif()
 
 project(axhost VERSION 0.1.0 LANGUAGES CXX)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets AxContainer LinguistTools)
+find_package(Qt6 REQUIRED COMPONENTS Widgets AxContainer Concurrent LinguistTools)
 find_package(CLI11 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 
@@ -82,9 +82,16 @@ configure_file(
   "${CMAKE_CURRENT_BINARY_DIR}/config.h"
 )
 
-qt_add_executable(axhost_executable MANUAL_FINALIZATION "${CMAKE_SOURCE_DIR}/src/main.cc")
+file(GLOB_RECURSE PROJECT_CXX_FILES
+    "${CMAKE_CURRENT_LIST_DIR}/src/*.h"
+    "${CMAKE_CURRENT_LIST_DIR}/src/*.cc"
+    "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/src/*.h.in"
+)
+
+qt_add_executable(axhost_executable MANUAL_FINALIZATION "${PROJECT_CXX_FILES}")
 target_include_directories(axhost_executable PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(axhost_executable PRIVATE Qt6::Widgets Qt6::AxContainer CLI11::CLI11 spdlog::spdlog)
+target_link_libraries(axhost_executable PRIVATE Qt6::Widgets Qt6::AxContainer Qt6::Concurrent CLI11::CLI11 spdlog::spdlog)
 set_target_properties(axhost_executable PROPERTIES
     WIN32_EXECUTABLE TRUE
     OUTPUT_NAME "${AXHOST_OUTPUT_NAME}"
