@@ -27,6 +27,7 @@
 
 #include "class_spec.h"
 #include "container_factory.h"
+#include "globals.h"
 #include "utils.h"
 
 HostContainerFactoryRegistry::HostContainerFactoryRegistry(
@@ -59,6 +60,7 @@ Invalid CLSID: '%1'
     if (SUCCEEDED(reg)) {
       m_registry.push_back(cookie);
       ++success;
+      g_registrations.ref();
     } else {
       DWORD err = GetLastError();
       QString msg = GetLastErrorMessage(err);
@@ -109,8 +111,11 @@ HostContainerFactoryRegistry::~HostContainerFactoryRegistry() {
   HRESULT sus = CoSuspendClassObjects();
   for (DWORD cookie : m_registry) {
     HRESULT hr = CoRevokeClassObject(cookie);
+    if (SUCCEEDED(hr)) {
+      g_registrations.deref();
+    }
   }
-  if (SUCCEEDED(sus)) {
+  if (SUCCEEDED(sus) && g_registrations.loadRelaxed() > 0) {
     HRESULT res = CoResumeClassObjects();
   }
 }

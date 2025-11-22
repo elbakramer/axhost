@@ -20,5 +20,6 @@
 
 QAtomicInteger<ulong> g_creations = 0;
 QAtomicInteger<ulong> g_locks = 0;
+QAtomicInteger<ulong> g_registrations = 0;
 
 bool g_warnedIdle = false;

@@ -23,6 +23,7 @@
 
 extern QAtomicInteger<ulong> g_creations;
 extern QAtomicInteger<ulong> g_locks;
+extern QAtomicInteger<ulong> g_registrations;
 
 extern bool g_warnedIdle;
 
