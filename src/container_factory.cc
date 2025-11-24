@@ -55,7 +55,6 @@ HostContainerFactory::CreateInstance(IUnknown *outer, REFIID riid, void **ppv) {
   if (!container)
     return E_OUTOFMEMORY;
   if (!container->IsInitialized()) {
-    container.Release();
     return CLASS_E_CLASSNOTAVAILABLE;
   }
   return container->QueryInterface(riid, ppv);
