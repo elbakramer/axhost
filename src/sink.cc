@@ -18,6 +18,8 @@
 
 #include "sink.h"
 
+#include <wil/resource.h>
+
 #include <QtConcurrent>
 
 #include <QFuture>
@@ -145,27 +147,28 @@ HRESULT STDMETHODCALLTYPE HostEventSink::Invoke(
     return DISP_E_UNKNOWNINTERFACE;
   if (!m_cookie)
     return E_UNEXPECTED;
-  HANDLE hEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+  wil::unique_event hEvent;
+  hEvent.create(wil::EventOptions::None);
   if (!hEvent)
-    return HRESULT_FROM_WIN32(GetLastError());
+    return E_FAIL;
+  HANDLE hEventRaw = hEvent.get();
   QFuture<HRESULT> res = QtConcurrent::run(
       GetThreadPool().data(), InvokeInThread, dispIdMember, riid, lcid, wFlags,
-      pDispParams, pVarResult, pExcepInfo, puArgErr, m_cookie, hEvent
+      pDispParams, pVarResult, pExcepInfo, puArgErr, m_cookie, hEventRaw
   );
   DWORD index = 0;
+  HRESULT hr;
   while (true) {
-    HRESULT hr = CoWaitForMultipleHandles(
-        COWAIT_INPUTAVAILABLE | COWAIT_DISPATCH_CALLS, INFINITE, 1, &hEvent,
+    hr = CoWaitForMultipleHandles(
+        COWAIT_INPUTAVAILABLE | COWAIT_DISPATCH_CALLS, INFINITE, 1, &hEventRaw,
         &index
     );
     if (FAILED(hr)) {
-      CloseHandle(hEvent);
       return hr;
     }
     if (index == WAIT_OBJECT_0)
       break;
   }
-  CloseHandle(hEvent);
-  HRESULT hr = res.result();
+  hr = res.result();
   return hr;
 }

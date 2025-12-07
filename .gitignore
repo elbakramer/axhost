@@ -243,3 +243,10 @@ cython_debug/
 
 # Release Note
 NOTES.md
+
+# Claude Code
+CLAUDE.md
+.claude/
+
+# Temporary test scripts
+/test_*.py

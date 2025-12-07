@@ -16,15 +16,29 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef UTILS_H
-#define UTILS_H
+#include "as_classid.h"
+
+#include <string>
 
 #include <windows.h>
 
 #include <QString>
+#include <QUuid>
 
-QString GetLastErrorMessage(DWORD err = GetLastError());
-
-BOOL ExitApplicationLater(int retcode = 0);
-
-#endif // UTILS_H
+AsClassId ::AsClassId()
+    : CLI::Validator(
+          [this](std::string &input) -> std::string {
+            GUID u;
+            HRESULT hr = CLSIDFromString(CLI::widen(input).c_str(), &u);
+            if (FAILED(hr)) {
+              return QString("invalid clsid string (%1): %2")
+                  .arg(hr)
+                  .arg(input)
+                  .toStdString();
+            }
+            input =
+                QUuid(u).toString(QUuid::WithBraces).toUpper().toStdString();
+            return std::string{};
+          },
+          "CLSID"
+      ) {}

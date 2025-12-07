@@ -16,10 +16,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "globals.h"
+#ifndef AS_CLASSID_H
+#define AS_CLASSID_H
 
-QAtomicInteger<ulong> g_creations = 0;
-QAtomicInteger<ulong> g_locks = 0;
-QAtomicInteger<ulong> g_registrations = 0;
+#include <CLI/CLI.hpp>
 
-bool g_warnedIdle = false;
+class AsClassId : public CLI::Validator {
+public:
+  AsClassId();
+};
+
+#endif // AS_CLASSID_H

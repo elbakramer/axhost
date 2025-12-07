@@ -18,50 +18,125 @@
 
 #include <QApplication>
 #include <QCoreApplication>
+#include <QGuiApplication>
 #include <QMessageBox>
+#include <QScopedPointer>
 #include <QString>
+#include <QStringList>
 
 #include "config.h"
 
 #include "com_initialize_context.h"
+#include "command_line.h"
 #include "command_line_parser.h"
-#include "container_factory_registry.h"
-#include "exit_condition_checker.h"
+#include "logging.h"
+#include "registry_helper.h"
+#include "surrogate_runtime.h"
 #include "utils.h"
 
+#include <wil/resource.h>
+#include <wil/result.h>
+
+#include "spdlog/spdlog.h"
+
+void SetApplicationInformation() {
+  QApplication::setApplicationName(CMAKE_PROJECT_NAME);
+  QApplication::setApplicationDisplayName(CMAKE_PROJECT_NAME);
+  QApplication::setApplicationVersion(CMAKE_PROJECT_VERSION);
+}
+
+void SetPreferredLanguages() {
+  QStringList languages = {"en-US"};
+  QChar separator = QChar(u'\0');
+  QString languagesJoined = languages.join(separator);
+  languagesJoined.append(separator);
+  PCZZWSTR buffer = reinterpret_cast<PCZZWSTR>(languagesJoined.utf16());
+  THROW_LAST_ERROR_IF(
+      !SetProcessPreferredUILanguages(MUI_LANGUAGE_NAME, buffer, nullptr) &&
+      IsDebuggerPresent()
+  );
+}
+
+wil::unique_couninitialize_call
+InitializeCom(DWORD dwCoInit = COINIT_APARTMENTTHREADED) {
+  THROW_IF_FAILED_MSG(
+      ::CoInitializeEx(nullptr, dwCoInit), "CoInitializeEx failed."
+  );
+  wil::unique_couninitialize_call cleanup;
+  return cleanup;
+}
+
+void InitializeComSecurity() {
+  THROW_IF_FAILED_MSG(
+      ::CoInitializeSecurity(
+          nullptr, -1, nullptr, nullptr, RPC_C_AUTHN_LEVEL_DEFAULT,
+          RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_APPID, nullptr
+      ),
+      "CoInitializeSecurity failed."
+  );
+}
+
 int main(int argc, char *argv[]) {
-  ComInitializeContext coinit;
-  QApplication app(argc, argv);
-
-  app.setApplicationDisplayName(CMAKE_PROJECT_NAME);
-  app.setApplicationVersion(CMAKE_PROJECT_VERSION);
-
-  if (!coinit.IsInitialized()) {
-    DWORD err = GetLastError();
-    QString msg = GetLastErrorMessage(err);
-    QString text = QString(R"(
-Error: COM Initialization Failed
-
-CoInitializeEx failed.
-
-Error message:
-%1)")
-                       .arg(msg)
-                       .trimmed();
-    QMessageBox::critical(nullptr, QCoreApplication::applicationName(), text);
-    return err;
-  }
+  SetApplicationInformation();
 
   CommandLineParser parser;
-  ParsedResult parsed = parser.parse(argc, argv);
+  ParsedResult parsed;
 
-  if (parsed.code != 0 || parsed.specs.empty()) {
-    return parsed.code;
+  parsed = parser.tryParse(argc, argv);
+
+  if (!parsed.classId.isNull() && parsed.embedding) {
+    InitializeLoggingSurrogate(parsed.classId.toString());
+  } else {
+    InitializeLoggingStandalone(parsed);
   }
 
-  ExitConditionChecker *checker =
-      new ExitConditionChecker(parsed.timeout, &app);
-  HostContainerFactoryRegistry registry(parsed.specs, parsed.readyEvent);
+  spdlog::info("Command line: {}", CreateCommandLine(argc, argv).toStdString());
+
+  SetPreferredLanguages();
+
+  auto UninitializeCom = InitializeCom();
+  InitializeComSecurity();
+
+  QApplication app(argc, argv);
+  QScopedPointer<HostSurrogateRuntime> runtime;
+
+  parsed = parser.parse(argc, argv);
+
+  if (!parsed.registerAppId.isEmpty()) {
+    if (!parsed.registerClassId.isEmpty()) {
+      THROW_IF_FAILED_MSG(
+          RegisterSurrogate(parsed.registerClassId, parsed.registerAppId),
+          "RegisterSurrogate failed."
+      );
+    }
+    LoggingSettings settings;
+    settings.enabled = parsed.registerLogging;
+    settings.level = parsed.registerLogLevel;
+    settings.directory = parsed.registerLogDir;
+    THROW_IF_FAILED_MSG(
+        WriteLoggingSettings(parsed.registerAppId, settings),
+        "WriteLoggingSettings failed."
+    );
+    return 0;
+  }
+
+  if (!parsed.unregisterClassId.isEmpty()) {
+    THROW_IF_FAILED_MSG(
+        UnregisterSurrogate(parsed.unregisterClassId),
+        "UnregisterSurrogate failed."
+    );
+    return 0;
+  }
+
+  if (!parsed.classId.isNull() && parsed.embedding) {
+    runtime.reset(new RunAsSurrogate(parsed.classId, parsed.embedding));
+  } else if (!parsed.specs.isEmpty()) {
+    runtime.reset(
+        new RunAsStandalone(parsed.specs, parsed.readyEvent, parsed.regcls)
+    );
+  } else {
+    return 0;
+  }
 
   return app.exec();
 }

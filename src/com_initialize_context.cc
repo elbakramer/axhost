@@ -18,9 +18,12 @@
 
 #include "com_initialize_context.h"
 
+#include <wil/resource.h>
+#include <wil/result.h>
+
 ComInitializeContext::ComInitializeContext(DWORD dwCoInit) {
   m_hr = CoInitializeEx(nullptr, dwCoInit);
-  m_initialized = (m_hr == S_OK || m_hr == S_FALSE);
+  m_initialized = SUCCEEDED(m_hr);
 }
 
 ComInitializeContext::~ComInitializeContext() {
@@ -29,5 +32,10 @@ ComInitializeContext::~ComInitializeContext() {
   }
 }
 
-bool ComInitializeContext::IsInitialized() { return m_initialized; }
+BOOL ComInitializeContext::IsInitialized() { return m_initialized; }
+
 HRESULT ComInitializeContext::Result() { return m_hr; }
+
+void ComInitializeContext::ThrowIfFailed() {
+  THROW_IF_FAILED_MSG(m_hr, "COM Initialization Failed");
+}

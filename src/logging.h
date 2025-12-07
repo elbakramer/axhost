@@ -16,27 +16,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef EXIT_CONDITION_CHECKER_H
-#define EXIT_CONDITION_CHECKER_H
+#ifndef LOGGING_H
+#define LOGGING_H
 
-#include <windows.h>
+#include <QString>
 
-#include <QObject>
-#include <QTimer>
+#include "command_line_parser.h"
 
-class ExitConditionChecker : public QTimer {
-  Q_OBJECT
-
-private:
-  ulong m_timeout;
-
-public:
-  ExitConditionChecker(ulong timeout, QObject *parent = nullptr);
-
-public slots:
-  void start();
-  void check();
-  void checkLater(int delay = 5000);
+struct LoggingSettings {
+  bool enabled = false;
+  QString level;
+  QString directory;
+  QString file;
 };
 
-#endif // EXIT_CONDITION_CHECKER_H
+void InitializeLoggingStandalone(const ParsedResult &parsed);
+void InitializeLoggingSurrogate(const QString &clsid);
+
+#endif // LOGGING_H

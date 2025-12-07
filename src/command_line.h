@@ -16,15 +16,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef UTILS_H
-#define UTILS_H
-
-#include <windows.h>
+#ifndef COMMAND_LINE_H
+#define COMMAND_LINE_H
 
 #include <QString>
+#include <QStringList>
+#include <QStringView>
 
-QString GetLastErrorMessage(DWORD err = GetLastError());
+bool ArgNeedsQuotes(QStringView arg);
 
-BOOL ExitApplicationLater(int retcode = 0);
+QString QuoteSingleArg(QStringView arg);
 
-#endif // UTILS_H
+QString CreateCommandLine(
+    const QString &program, const QStringList &arguments,
+    const QString &nativeArguments
+);
+
+QString CreateCommandLine(const QStringList &arguments);
+
+QString CreateCommandLine(int argc, char *argv[]);
+
+#endif // COMMAND_LINE_H

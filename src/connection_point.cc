@@ -90,7 +90,7 @@ HostConnectionPoint::Advise(IUnknown *pUnkSink, DWORD *pdwCookie) {
   HRESULT hr = m_underlying->Advise(proxy, pdwCookie);
   if (SUCCEEDED(hr)) {
     DWORD dwCookie = *pdwCookie;
-    m_connections.emplace(dwCookie, proxy.p);
+    m_connections.emplace(dwCookie, proxy);
     m_underlyingConnections.emplace(dwCookie, pUnkSink);
   }
   return hr;

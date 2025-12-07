@@ -29,8 +29,8 @@
 
 #include <QAxWidget>
 #include <QSharedPointer>
+#include <QUuid>
 
-#include "class_spec.h"
 #include "connection_point_container.h"
 #include "external_connection.h"
 #include "provide_class_info.h"
@@ -41,9 +41,9 @@ class HostContainer : public IProvideClassInfo2,
 private:
   std::atomic<ULONG> m_ref{0};
 
-  ClassSpec m_spec;
+  QUuid m_classId;
+  DWORD m_classContext;
 
-  CLSID m_classId;
   QSharedPointer<QAxWidget> m_control;
 
   CComPtr<HostProvideClassInfo> m_provideClassInfo;
@@ -51,7 +51,7 @@ private:
   CComPtr<HostExternalConnection> m_externalConnection;
 
 public:
-  HostContainer(const ClassSpec &spec);
+  HostContainer(REFCLSID clsid, DWORD clsctx = CLSCTX_SERVER);
   ~HostContainer();
 
   bool IsInitialized();

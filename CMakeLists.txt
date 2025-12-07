@@ -38,6 +38,7 @@ project(axhost VERSION 0.1.0 LANGUAGES CXX)
 find_package(Qt6 REQUIRED COMPONENTS Widgets AxContainer Concurrent LinguistTools)
 find_package(CLI11 CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(WIL CONFIG REQUIRED)
 
 get_target_property(QT6_AUTOMOC_EXECUTABLE Qt6::moc IMPORTED_LOCATION)
 get_target_property(QT6_AUTOUIC_EXECUTABLE Qt6::uic IMPORTED_LOCATION)
@@ -91,7 +92,7 @@ file(GLOB_RECURSE PROJECT_CXX_FILES
 
 qt_add_executable(axhost_executable MANUAL_FINALIZATION "${PROJECT_CXX_FILES}")
 target_include_directories(axhost_executable PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(axhost_executable PRIVATE Qt6::Widgets Qt6::AxContainer Qt6::Concurrent CLI11::CLI11 spdlog::spdlog)
+target_link_libraries(axhost_executable PRIVATE Qt6::Widgets Qt6::AxContainer Qt6::Concurrent CLI11::CLI11 spdlog::spdlog WIL::WIL)
 set_target_properties(axhost_executable PROPERTIES
     WIN32_EXECUTABLE TRUE
     OUTPUT_NAME "${AXHOST_OUTPUT_NAME}"

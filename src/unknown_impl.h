@@ -28,7 +28,13 @@ private:
   std::atomic<ULONG> m_ref{0};
 
 protected:
+  CUnknownImpl() = default;
   virtual ~CUnknownImpl() = default;
+
+  CUnknownImpl(const CUnknownImpl &) = delete;
+  CUnknownImpl &operator=(const CUnknownImpl &) = delete;
+  CUnknownImpl(CUnknownImpl &&) = delete;
+  CUnknownImpl &operator=(CUnknownImpl &&) = delete;
 
 public:
   ULONG STDMETHODCALLTYPE AddRef() override { return ++m_ref; }

@@ -21,41 +21,43 @@
 
 #include <CLI/CLI.hpp>
 
-#include <QCoreApplication>
+#include <QList>
 #include <QString>
+#include <QUuid>
 
-#include <map>
-#include <string>
-#include <vector>
+#include <windows.h>
 
 #include "class_spec.h"
 
 struct ParsedResult {
+  QUuid classId;
+  QString processId;
+  bool embedding;
+  bool automation;
+
   QList<ClassSpec> specs;
   int timeout = 60000;
   QString readyEvent;
+  DWORD regcls = 0;
+
+  bool enableLogging = false;
+  QString logLevel;
+  QString logFile;
+  QString logDir;
+
+  QString registerClassId;
+  QString registerAppId;
+  QString unregisterClassId;
+
+  bool registerLogging = false;
+  QString registerLogLevel;
+  QString registerLogDir;
 
   int code = 0;
   QString msg;
 };
 
-class AsDuration : public CLI::AsNumberWithUnit {
-private:
-  static const std::map<std::string, int> m_mapping;
-  static const std::vector<std::string> m_units;
-
-private:
-  static std::string generate_description(
-      const std::string &type_name, const std::string &unit_name, Options opts
-  );
-
-public:
-  AsDuration();
-};
-
 class CommandLineParser {
-  Q_DECLARE_TR_FUNCTIONS(CommandLineParser)
-
 private:
   QString m_appName;
   QString m_appVersion;
@@ -66,6 +68,8 @@ private:
 
 public:
   CommandLineParser();
+
+  ParsedResult tryParse(int argc, char *argv[]);
   ParsedResult parse(int argc, char *argv[]);
 };
 

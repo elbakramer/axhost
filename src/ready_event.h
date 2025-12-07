@@ -16,15 +16,31 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef GLOBALS_H
-#define GLOBALS_H
+#ifndef READY_EVENT_H
+#define READY_EVENT_H
 
-#include <QAtomicInteger>
+#include <wil/resource.h>
+#include <windows.h>
 
-extern QAtomicInteger<ulong> g_creations;
-extern QAtomicInteger<ulong> g_locks;
-extern QAtomicInteger<ulong> g_registrations;
+#include <QString>
 
-extern bool g_warnedIdle;
+class HostReadyEvent {
+private:
+  wil::unique_event m_event;
 
-#endif // GLOBALS_H
+public:
+  HostReadyEvent(const QString &event);
+  HostReadyEvent();
+
+  HostReadyEvent(const HostReadyEvent &) = delete;
+  HostReadyEvent &operator=(const HostReadyEvent &) = delete;
+
+  HostReadyEvent(HostReadyEvent &&) noexcept = default;
+  HostReadyEvent &operator=(HostReadyEvent &&) noexcept = default;
+
+public:
+  BOOL SetEvent();
+  BOOL IsValid();
+};
+
+#endif // READY_EVENT_H

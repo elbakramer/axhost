@@ -30,6 +30,7 @@ This project builds upon prior work and discussions around 32 ↔ 64-bit COM/Act
 * "Accessing 32-bit DLLs from 64-bit code" (Matt Mags Blog): https://blog.mattmags.com/2007/06/30/accessing-32-bit-dlls-from-64-bit-code/
 * Stack Overflow: "Load 32-bit DLL library in 64-bit application": https://stackoverflow.com/questions/2265023/load-32-bit-dll-library-in-64-bit-application
 * Stack Overflow: "Calling 32-bit code from 64-bit process": https://stackoverflow.com/questions/128445/calling-32bit-code-from-64bit-process
+* Writing a Custom Surrogate: https://learn.microsoft.com/en-us/windows/win32/com/writing-a-custom-surrogate
 
 ## Key Features
 
@@ -42,9 +43,13 @@ This project builds upon prior work and discussions around 32 ↔ 64-bit COM/Act
 
 ## Command-Line Usage
 
-**Note:** `axhost` requires command-line arguments. Launching it without parameters (e.g., by double-clicking) will not perform any action and will exit immediately.
+`axhost` supports two operation modes:
 
-### Register one or more classes
+1. **Surrogate Mode** (no arguments): Registers as a COM surrogate via `CoRegisterSurrogate`. This mode is typically invoked automatically by the COM runtime (SCM/RPCSS) when a client requests a component configured to use `axhost` as its DllSurrogate. The process stays alive with a 60-second timeout protection.
+
+2. **Standalone Mode** (with `--clsid` arguments): Manually registers specific CLSIDs and hosts them directly. This mode is used for explicit, user-controlled component hosting.
+
+### Register one or more classes (Standalone Mode)
 
 ```bash
 axhost --clsid "{0002DF01-0000-0000-C000-000000000046}" --clsid ...
@@ -64,7 +69,7 @@ c[/a[/cc[/cr[/r]]]]
 | a     | Alias CLSID (used for registration name) | same as `c`                                                     |
 | cc    | `CLSCTX` for creation                    | `CLSCTX_INPROC_SERVER`                                          |
 | cr    | `CLSCTX` for registration                | `CLSCTX_LOCAL_SERVER`                                           |
-| r     | `REGCLS` flags                           | `REGCLS_SINGLEUSE \| REGCLS_MULTI_SEPARATE \| REGCLS_SUSPENDED` |
+| r     | `REGCLS` flags                           | `REGCLS_MULTI_SEPARATE \| REGCLS_SINGLEUSE` (or `\| REGCLS_MULTIPLEUSE` with `--multiple-use`)  |
 
 #### Notes
 
@@ -72,6 +77,9 @@ c[/a[/cc[/cr[/r]]]]
 * Numeric fields (`cc`, `cr`, `r`) accept decimal or hex (`0x...`) values.
 * You can use `//` to skip intermediate fields while keeping their defaults.
 * Trailing fields can be omitted entirely if not needed.
+* `REGCLS_SUSPENDED` is added automatically during registration when applicable.
+* Explicitly specifying the `r` field bypasses all defaults (`REGCLS_MULTI_SEPARATE`, `REGCLS_SUSPENDED`) and global flags (`--single-use`/`--multiple-use`). Your value is used exactly as provided.
+* When using `--multiple-use`, the host tries to re-register the original InProc class factory when applicable to prevent the surrogate from instantiating itself. Using an explicit alias is recommended to clearly separate the surrogate registration from the source.
 
 #### Examples
 
@@ -81,13 +89,60 @@ axhost --clsid "{CLSID}//0x1//0x2"
 axhost --clsid "{CLSID}/{ALIAS}/0x1/0x4/0x2"
 ```
 
+### Surrogate Mode Configuration
+
+To use `axhost` as a DllSurrogate for a specific CLSID, configure the Windows registry:
+
+```reg
+[HKEY_CLASSES_ROOT\CLSID\{YOUR-CLSID}]
+"AppID"="{YOUR-APP-ID}"
+
+[HKEY_CLASSES_ROOT\AppID\{YOUR-APP-ID}]
+"DllSurrogate"="C:\\path\\to\\axhost.exe"
+```
+
+When a client requests this CLSID with `CLSCTX_LOCAL_SERVER`, the COM runtime automatically launches `axhost` in Surrogate Mode.
+
 ### Timeout
 
 ```bash
 axhost --clsid "{CLSID}" --timeout 30s
 ```
 
-Exits automatically if no COM activity occurs within 30 seconds (default: 1 minute; supports units: `ms`, `s`, `m`, `h`).
+Exits automatically if no COM activity occurs within the specified period (default: 1 minute; supports units: `ms`, `s`, `m`, `h`).
+
+**Note**: Both Surrogate Mode and Standalone Mode enforce a 60-second timeout. If no COM interaction occurs during this period, a warning dialog is shown and the process exits gracefully.
+
+### Registration Mode
+
+By default, `axhost` uses **single-use mode** where class factories serve one instance and then unregister.
+You can change this behavior with command-line flags:
+
+```bash
+# Single-use mode (default) - process exits immediately when instances are released
+axhost --clsid "{CLSID}"
+
+# Multiple-use mode - process waits for timeout after instances are released
+axhost --clsid "{SOURCE-CLSID}/{ALIAS-CLSID}" --multiple-use
+```
+
+**Single-use mode** (`--single-use`, default):
+- Class factory serves one instance, then unregisters automatically
+- Process exits immediately when all instances are released
+- Each client connection requires launching a new host process
+
+**Multiple-use mode** (`--multiple-use`):
+- Class factory remains registered and can serve multiple instances
+- Process waits for the timeout period after all instances are released
+- Allows subsequent clients to connect during the timeout window without restarting
+- The host tries to re-register the original InProc to prevent self-instantiation (explicit alias recommended)
+
+Example with explicit alias:
+```bash
+axhost --clsid "{SOURCE-CLSID}/{ALIAS-CLSID}" --multiple-use
+```
+
+Note: Explicit `REGCLS` values in the `--clsid` format override these flags.
 
 ## Technical Notes
 
@@ -97,8 +152,33 @@ Exits automatically if no COM activity occurs within 30 seconds (default: 1 minu
 
 ## Lifetime Behavior
 
-* `axhost` registers class factories with **REGCLS_SINGLEUSE** by default. This means that, after the first client connects, that class factory is removed from public view, and subsequent activation requests for the same class will require launching a new host process. ([Microsoft Learn][1])
-* When the server's reference count drops to zero via `CoReleaseServerProcess`, OLE automatically calls `CoSuspendClassObjects`, preventing further activations; subsequent activation attempts will require a new local-server instance. ([Microsoft Learn][2])
+### Surrogate Mode
+
+In Surrogate Mode (no command-line arguments):
+
+* `axhost` registers itself via `CoRegisterSurrogate`
+* The COM runtime (SCM/RPCSS) manages class factory registration automatically
+* Process lifetime is controlled by COM reference counting and timeout protection
+* If no COM interaction occurs within 60 seconds of launch, the process exits with a warning
+
+### Single-Use Mode (Default in Standalone Mode)
+
+In single-use mode (`--single-use` or default), class factories are registered with **REGCLS_SINGLEUSE**:
+
+* After the first client connects, the class factory is removed from public view ([Microsoft Learn][1])
+* When the server's reference count drops to zero via `CoReleaseServerProcess`, the process exits immediately
+* Subsequent activation requests require launching a new host process
+
+### Multiple-Use Mode
+
+In multiple-use mode (`--multiple-use`), class factories are registered with **REGCLS_MULTIPLEUSE**:
+
+* The class factory remains registered and can serve multiple client connections
+* When the server's reference count drops to zero, the process waits for the timeout period (configurable via `--timeout`)
+* During the timeout window, new clients can connect without restarting the host
+* If no new connections occur within the timeout period, the process exits gracefully
+
+When `CoReleaseServerProcess` returns zero (no active references), OLE automatically calls `CoSuspendClassObjects`, preventing further activations until the timeout-based exit check determines the final action. ([Microsoft Learn][2])
 
 [1]: https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/ne-combaseapi-regcls "REGCLS (combaseapi.h) - Win32 apps | Microsoft Learn"
 [2]: https://learn.microsoft.com/en-us/windows/win32/api/combaseapi/nf-combaseapi-coreleaseserverprocess "CoReleaseServerProcess function (combaseapi.h)"

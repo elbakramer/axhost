@@ -49,7 +49,7 @@ HRESULT HostConnectionPointContainer::GetProxyConnectionPoint(
     CComQIPtr<IConnectionPoint> proxyInner = proxyConcrete.p;
     if (!proxyInner)
       return E_UNEXPECTED;
-    m_proxyConnectionPoints.emplace(pCP, proxyInner.p);
+    m_proxyConnectionPoints.emplace(pCP, proxyInner);
     proxy = proxyInner;
   }
   if (!proxy)

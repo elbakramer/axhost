@@ -62,12 +62,21 @@ add_external_project(spdlog
     GIT_TAG "v1.16.0"
 )
 
+add_external_project(wil
+	GIT_REPOSITORY "https://github.com/microsoft/wil.git"
+	GIT_TAG "v1.0.250325.1"
+    CMAKE_CACHE_ARGS
+        "-DWIL_BUILD_TESTS:BOOL=${BUILD_TESTING}"
+        "-DWIL_BUILD_PACKAGING:BOOL=OFF"
+        "-DBUILD_TESTING:BOOL=${BUILD_TESTING}"
+)
+
 add_external_project(axhost
     BUILD_ALWAYS ON
     CMAKE_CACHE_ARGS
         "-DAXHOST_SUPERBUILD:BOOL=OFF"
         "-DAXHOST_OUTPUT_NAME:STRING=${AXHOST_OUTPUT_NAME}"
-    DEPENDS qt6 cli11 spdlog
+    DEPENDS qt6 cli11 spdlog wil
 )
 
 ExternalProject_Get_Property(axhost INSTALL_DIR)

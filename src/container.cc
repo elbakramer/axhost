@@ -31,37 +31,22 @@
 #include <QString>
 #include <QUuid>
 
-#include "class_spec.h"
 #include "connection_point_container.h"
 #include "external_connection.h"
-#include "globals.h"
 #include "provide_class_info.h"
+#include "surrogate_runtime.h"
 #include "utils.h"
 
-HostContainer::HostContainer(const ClassSpec &spec)
-    : m_spec(spec),
+HostContainer::HostContainer(REFCLSID clsid, DWORD clsctx)
+    : m_classId(clsid),
+      m_classContext(clsctx),
       m_control(new QAxWidget()) {
-  HRESULT conv = CLSIDFromString(spec.clsid.toStdWString().c_str(), &m_classId);
-
-  if (FAILED(conv)) {
-    QString text = QString(R"(
-Error: CLSID Parsing Failed
-
-Invalid CLSID: '%1'
-)")
-                       .arg(spec.clsid)
-                       .trimmed();
-    QMessageBox::critical(nullptr, QCoreApplication::applicationName(), text);
-    return;
+  if (auto *runtime = HostSurrogateRuntime::instance()) {
+    runtime->AddServerReference();
   }
+  m_control->setClassContext(m_classContext);
 
-  m_control->setClassContext(spec.clsctx_create);
-
-  if (m_control->setControl(spec.clsid) && !m_control->isNull()) {
-    CoAddRefServerProcess();
-    g_locks.ref();
-    g_creations.ref();
-
+  if (m_control->setControl(m_classId.toString()) && !m_control->isNull()) {
     CComPtr<IProvideClassInfo> underlyingPCI;
     CComPtr<IProvideClassInfo2> underlyingPCI2;
     m_control->queryInterface(IID_IProvideClassInfo, (void **)&underlyingPCI);
@@ -81,7 +66,9 @@ Invalid CLSID: '%1'
     m_externalConnection = new HostExternalConnection(underlyingEC);
   } else {
     DWORD err = GetLastError();
-    QString msg = GetLastErrorMessage(err);
+    QString classId = m_classId.toString();
+    QString classContext = QString::number(m_classContext, 16);
+    QString errorMessage = GetLastErrorMessage(err);
     QString text = QString(R"(
 Error: Control Loading Failed
 
@@ -92,19 +79,17 @@ CLSCTX: 0x%2
 
 Error message:
 %3)")
-                       .arg(spec.clsid)
-                       .arg(QString::number(spec.clsctx_create, 16))
-                       .arg(msg)
+                       .arg(classId)
+                       .arg(classContext)
+                       .arg(errorMessage)
                        .trimmed();
     QMessageBox::critical(nullptr, QCoreApplication::applicationName(), text);
   }
 }
 
 HostContainer::~HostContainer() {
-  bool shouldExit = CoReleaseServerProcess() == 0;
-  bool shouldTestExit = !g_locks.deref();
-  if (shouldExit) {
-    QCoreApplication::exit();
+  if (auto *runtime = HostSurrogateRuntime::instance()) {
+    runtime->ReleaseServerReference();
   }
 }
 

@@ -16,25 +16,28 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef CONTAINER_FACTORY_REGISTRY_H
-#define CONTAINER_FACTORY_REGISTRY_H
+#ifndef AS_DURATION_H
+#define AS_DURATION_H
 
-#include <windows.h>
+#include <map>
+#include <sstream>
+#include <string>
+#include <vector>
 
-#include <QList>
-#include <QString>
+#include <CLI/CLI.hpp>
 
-#include "class_spec.h"
-
-class HostContainerFactoryRegistry {
+class AsDuration : public CLI::AsNumberWithUnit {
 private:
-  QList<DWORD> m_registry;
+  static const std::map<std::string, int> m_mapping;
+  static const std::vector<std::string> m_units;
+
+private:
+  static std::string generate_description(
+      const std::string &type_name, const std::string &unit_name, Options opts
+  );
 
 public:
-  HostContainerFactoryRegistry(
-      const QList<ClassSpec> &specs, const QString &readyEvent = ""
-  );
-  ~HostContainerFactoryRegistry();
+  AsDuration();
 };
 
-#endif
+#endif // AS_DURATION_H

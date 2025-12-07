@@ -18,6 +18,9 @@
 
 #include "provide_class_info.h"
 
+#include <wil/registry.h>
+#include <wil/resource.h>
+
 #include <string>
 
 HostProvideClassInfo::HostProvideClassInfo(
@@ -33,25 +36,26 @@ HostProvideClassInfo::ReadTypeLibIdFromCLSID(REFCLSID rclsid, GUID *pLibid) {
   if (!pLibid)
     return E_POINTER;
 
-  LPOLESTR clsidStr = nullptr;
+  wil::unique_cotaskmem_string clsidStr;
   HRESULT hr = StringFromCLSID(rclsid, &clsidStr);
   if (FAILED(hr))
     return hr;
 
   std::wstring key = L"CLSID\\";
-  key += clsidStr;
+  key += clsidStr.get();
   key += L"\\TypeLib";
-  CoTaskMemFree(clsidStr);
 
-  HKEY hKey = nullptr;
-  LONG rc = RegOpenKeyExW(HKEY_CLASSES_ROOT, key.c_str(), 0, KEY_READ, &hKey);
-  if (rc != ERROR_SUCCESS)
-    return HRESULT_FROM_WIN32(rc);
+  wil::unique_hkey hKey;
+  hr = wil::reg::open_unique_key_nothrow(
+      HKEY_CLASSES_ROOT, key.c_str(), hKey, wil::reg::key_access::read
+  );
+  if (FAILED(hr))
+    return hr;
 
   wchar_t buf[64];
   DWORD sz = sizeof(buf);
-  rc = RegQueryValueExW(hKey, nullptr, nullptr, nullptr, (LPBYTE)buf, &sz);
-  RegCloseKey(hKey);
+  LONG rc =
+      RegQueryValueExW(hKey.get(), nullptr, nullptr, nullptr, (LPBYTE)buf, &sz);
   if (rc != ERROR_SUCCESS)
     return HRESULT_FROM_WIN32(rc);
 
@@ -66,25 +70,28 @@ HostProvideClassInfo::FindLatestTypeLibVersion(
     return E_POINTER;
   *pMajor = *pMinor = 0;
 
-  LPOLESTR libStr = nullptr;
+  wil::unique_cotaskmem_string libStr;
   HRESULT hr = StringFromCLSID(libid, &libStr);
   if (FAILED(hr))
     return hr;
 
   std::wstring key = L"TypeLib\\";
-  key += libStr;
-  CoTaskMemFree(libStr);
+  key += libStr.get();
 
-  HKEY hKey = nullptr;
-  LONG rc = RegOpenKeyExW(HKEY_CLASSES_ROOT, key.c_str(), 0, KEY_READ, &hKey);
-  if (rc != ERROR_SUCCESS)
+  wil::unique_hkey hKey;
+  hr = wil::reg::open_unique_key_nothrow(
+      HKEY_CLASSES_ROOT, key.c_str(), hKey, wil::reg::key_access::read
+  );
+  if (FAILED(hr))
     return TYPE_E_LIBNOTREGISTERED;
 
   DWORD index = 0;
   wchar_t name[64];
   DWORD namelen = _countof(name);
+  LONG rc;
   while ((rc = RegEnumKeyExW(
-              hKey, index++, name, &namelen, nullptr, nullptr, nullptr, nullptr
+              hKey.get(), index++, name, &namelen, nullptr, nullptr, nullptr,
+              nullptr
           )) == ERROR_SUCCESS) {
     unsigned x = 0, y = 0;
     if (swscanf_s(name, L"%u.%u", &x, &y) == 2) {
@@ -95,7 +102,6 @@ HostProvideClassInfo::FindLatestTypeLibVersion(
     }
     namelen = _countof(name);
   }
-  RegCloseKey(hKey);
 
   return (*pMajor || *pMinor) ? S_OK : TYPE_E_LIBNOTREGISTERED;
 }

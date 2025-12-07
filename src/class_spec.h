@@ -24,14 +24,23 @@
 #include <windows.h>
 
 #include <QString>
+#include <QUuid>
 
 class ClassSpec {
 public:
-  QString clsid;
-  QString alias;
-  DWORD clsctx_create = CLSCTX_INPROC_SERVER;
-  DWORD clsctx_register = CLSCTX_LOCAL_SERVER;
-  DWORD regcls = REGCLS_SINGLEUSE | REGCLS_MULTI_SEPARATE | REGCLS_SUSPENDED;
+  QUuid clsid;
+  QUuid alias;
+  QString clsid_input;
+  QString alias_input;
+  DWORD clsctx_create = 0;
+  DWORD clsctx_register = 0;
+  DWORD regcls = 0;
+  bool regcls_explicit = false;
+  HRESULT result = 0;
+  DWORD error = 0;
+
+public:
+  void sanitize(DWORD regcls = 0);
 
 public:
   static ClassSpec fromString(const QString &item);

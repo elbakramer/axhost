@@ -23,15 +23,16 @@
 
 class ComInitializeContext {
 private:
-  bool m_initialized;
-  HRESULT m_hr;
+  BOOL m_initialized = FALSE;
+  HRESULT m_hr = 0;
 
 public:
   ComInitializeContext(DWORD dwCoInit = COINIT_APARTMENTTHREADED);
   ~ComInitializeContext();
 
-  bool IsInitialized();
+  BOOL IsInitialized();
   HRESULT Result();
+  void ThrowIfFailed();
 };
 
 #endif // COM_INITIALIZE_CONTEXT_H

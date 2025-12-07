@@ -18,21 +18,31 @@
 
 #include "utils.h"
 
+#include <wil/resource.h>
+
+#include <QCoreApplication>
+
 QString GetLastErrorMessage(DWORD err) {
-  LPWSTR buf = nullptr;
+  wil::unique_hlocal_string buf;
   DWORD len = FormatMessageW(
       FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
           FORMAT_MESSAGE_IGNORE_INSERTS,
-      nullptr, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&buf, 0,
-      nullptr
+      nullptr, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+      reinterpret_cast<LPWSTR>(buf.put()), 0, nullptr
   );
   QString msg;
   if (len && buf) {
-    msg = QString::fromWCharArray(buf, len).trimmed();
-  } else {
-    msg = "Unknown error";
+    msg = QString::fromWCharArray(buf.get(), len).trimmed();
   }
-  if (buf)
-    LocalFree(buf);
   return msg;
+}
+
+BOOL ExitApplicationLater(int retcode) {
+  QCoreApplication *app = QCoreApplication::instance();
+  if (app) {
+    return QMetaObject::invokeMethod(
+        app, "exit", Qt::QueuedConnection, Q_ARG(int, retcode)
+    );
+  }
+  return false;
 }

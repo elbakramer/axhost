@@ -20,18 +20,48 @@
 
 #include <string>
 
+#include <QCoreApplication>
+#include <QMessageBox>
+#include <QString>
 #include <QStringList>
+#include <QUuid>
+
+HRESULT CLSIDFromQString(const QString &s, QUuid &u) {
+  return CLSIDFromString(
+      reinterpret_cast<LPCOLESTR>(s.utf16()), reinterpret_cast<LPCLSID>(&u)
+  );
+}
 
 ClassSpec ClassSpec::fromString(const QString &item) {
   ClassSpec spec;
   QStringList parts = item.split("/");
   if (parts.size() > 0 && !parts[0].isEmpty()) {
-    spec.clsid = parts[0].trimmed();
+    spec.clsid_input = parts[0].trimmed();
+    HRESULT hr = CLSIDFromQString(spec.clsid_input, spec.clsid);
+    if (FAILED(hr)) {
+      QString text = QString(R"(
+Error: CLSID Parsing Failed
+
+Invalid CLSID: '%1'
+)")
+                         .arg(spec.clsid_input)
+                         .trimmed();
+      QMessageBox::warning(nullptr, QCoreApplication::applicationName(), text);
+    }
   }
   if (parts.size() > 1 && !parts[1].isEmpty()) {
-    spec.alias = parts[1].trimmed();
-  } else {
-    spec.alias = spec.clsid;
+    spec.alias_input = parts[1].trimmed();
+    HRESULT hr = CLSIDFromQString(spec.alias_input, spec.alias);
+    if (FAILED(hr)) {
+      QString text = QString(R"(
+Error: CLSID Parsing Failed
+
+Invalid CLSID: '%1'
+)")
+                         .arg(spec.alias_input)
+                         .trimmed();
+      QMessageBox::warning(nullptr, QCoreApplication::applicationName(), text);
+    }
   }
   if (parts.size() > 2 && !parts[2].isEmpty()) {
     bool ok = false;
@@ -52,9 +82,31 @@ ClassSpec ClassSpec::fromString(const QString &item) {
     DWORD value = parts[4].toUInt(&ok, 0);
     if (ok) {
       spec.regcls = value;
+      spec.regcls_explicit = true;
     }
   }
   return spec;
+}
+
+void ClassSpec::sanitize(DWORD regcls) {
+  if (alias_input.isEmpty()) {
+    alias_input = clsid_input;
+  }
+  if (alias.isNull()) {
+    alias = clsid;
+  }
+  if (clsctx_create == 0) {
+    clsctx_create = CLSCTX_INPROC_SERVER;
+  }
+  if (clsctx_register == 0) {
+    clsctx_register = CLSCTX_LOCAL_SERVER;
+  }
+  if (!regcls_explicit) {
+    if (regcls == 0) {
+      regcls = REGCLS_SINGLEUSE | REGCLS_MULTI_SEPARATE;
+    }
+    this->regcls = regcls;
+  }
 }
 
 std::istream &operator>>(std::istream &is, ClassSpec &out) {
@@ -66,7 +118,7 @@ std::istream &operator>>(std::istream &is, ClassSpec &out) {
 }
 
 std::ostream &operator<<(std::ostream &os, const ClassSpec &s) {
-  os << s.clsid.toStdString() << "/" << s.alias.toStdString() << "/"
+  os << s.clsid_input.toStdString() << "/" << s.alias_input.toStdString() << "/"
      << s.clsctx_create << "/" << s.clsctx_register << "/" << s.regcls;
   return os;
 }
